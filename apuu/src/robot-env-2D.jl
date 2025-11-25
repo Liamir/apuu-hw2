@@ -1,8 +1,8 @@
 module RobotEnv2D
 
-export POMDPscenario, InitParticleBelief, SampleMotionModel, GenerateObservation, ObsLikelihood
+export POMDPscenario, InitParticleBelief, SampleMotionModel, GenerateObservation, ObsLikelihood, GenerateObservationFromBeacons
 
-using apuu.ParticleFilter: ParticleBelief
+using apuu.ParticleFilter: ParticleBelief, PosteriorParticleBelief
 using Distributions
 using Random
 using Parameters
@@ -48,7 +48,7 @@ Initialize a particle belief based on a Gaussian prior.
 # Returns:
 - `ParticleBelief`: The initialized particle belief
 """
-function InitParticleBelief(𝒫::POMDPscenario, n_particles::Int, μ0::Vector{Float64}, Σ0::AbstractMatrix)::ParticleBelief
+function InitParticleBelief(n_particles::Int, μ0::Vector{Float64}, Σ0::AbstractMatrix)::ParticleBelief
     particles = [rand(MvNormal(μ0, Σ0)) for _ in 1:n_particles]
     weights = fill(1.0 / n_particles, n_particles)
 
@@ -98,14 +98,84 @@ end
 
 
 """
+Generate a relative observation from a single beacon.
+"""
+function GenerateSingleBeaconObservation(
+    𝒫::POMDPscenario, 
+    robot_x::Vector{Float64}, 
+    beacon_x::Vector{Float64}
+    )::Vector{Float64}
+    v = rand(𝒫.rng, MvNormal(zeros(2), 𝒫.Σv)) # v ~ N(0, Σv)
+    z_rel = (robot_x - beacon_x) + v
+    return z_rel
+end
 
+
+function GetFirstBeaconWithinDistance(
+    𝒫::POMDPscenario,
+    robot_x::Vector{Float64},
+    )::Union{Tuple{Vector{Float64}, Int}, Nothing}
+
+    # return index of the first beacon under distance threshold d:
+    for i in 1:size(𝒫.beacons, 1)
+        beacon_x = 𝒫.beacons[i, :]
+        if norm(robot_x - beacon_x) <= 𝒫.d
+            return (beacon_x, i)
+        end
+    end
+    
+    return nothing
+end
+
+
+"""
+Generate a relative observation from the first beacon under distance d.
+"""
+function GenerateObservationFromBeacons(
+    𝒫::POMDPscenario,
+    robot_x::Vector{Float64},
+    )::Union{Tuple{Vector{Float64}, Int}, Nothing}
+
+    # return an observation from the first beacon under distance threshold d:
+    result = GetFirstBeaconWithinDistance(𝒫, robot_x)
+    if result !== nothing
+        (beacon_x, i) = result
+        z_rel = GenerateSingleBeaconObservation(𝒫, robot_x, beacon_x)
+        return (z_rel, i)
+    end
+    
+    return nothing
+end
+
+
+
+"""
 Likelihood of an obseration given a state.
-
 """
 function ObsLikelihood(𝒫::POMDPscenario, z::Vector{Float64}, x::Vector{Float64})::Float64
     # input observation z and state x
     # output likelihood of the observation given the state
     return pdf(MvNormal(x, 𝒫.Σv), z)
+end
+
+function ObsFromBeaconsLikelihood(𝒫::POMDPscenario; z_rel::Vector{Float64}, robot_x::Vector{Float64})::Union{Float64, Nothing}
+
+    result = GetFirstBeaconWithinDistance(𝒫, robot_x)
+    if result !== nothing
+        (beacon_x, i) = result
+        x_rel = robot_x - beacon_x
+        return ObsLikelihood(𝒫, z_rel, x_rel)
+    end
+
+    return 0. # zero chance of receiving an observation if no beacon is close enough, can say this robot_x is impossible given z_rel
+end
+
+function ObsFromBeaconsLikelihood(𝒫::POMDPscenario, z_rel::Vector{Float64}, robot_x::Vector{Float64})::Union{Float64, Nothing}
+    return ObsFromBeaconsLikelihood(𝒫, z_rel=z_rel, robot_x=robot_x)
+end
+
+function PosteriorParticleBeliefBeacons(𝒫::POMDPscenario, b::ParticleBelief, a::Vector{Float64}, z′::Vector{Float64})::ParticleBelief
+    return PosteriorParticleBelief(𝒫, b, a, z′, SampleMotionModel, ObsFromBeaconsLikelihood)
 end
 
 

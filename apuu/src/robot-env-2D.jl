@@ -1,6 +1,8 @@
 module RobotEnv2D
 
 export POMDPscenario, InitParticleBelief, SampleMotionModel, GenerateObservation, ObsLikelihood, GenerateObservationFromBeacons
+export GenerateRangedObservationFromBeacons, GenerateSingleRangedBeaconObservation
+export beacon_grid
 
 using apuu.ParticleFilter: ParticleBelief, PosteriorParticleBelief
 using Distributions
@@ -31,7 +33,11 @@ POMDP scenario for a 2D robot environment
     rng::MersenneTwister
     beacons::Matrix{Float64} # nx2 (n is number of beacons)
     d::Float64
+    rmin::Union{Float64, Nothing} = nothing # optional: minimum range for observation deterioration
 end
+
+
+
 
 
 """
@@ -176,6 +182,65 @@ end
 
 function PosteriorParticleBeliefBeacons(𝒫::POMDPscenario, b::ParticleBelief, a::Vector{Float64}, z′::Vector{Float64})::ParticleBelief
     return PosteriorParticleBelief(𝒫, b, a, z′, SampleMotionModel, ObsFromBeaconsLikelihood)
+end
+
+
+
+
+
+
+"""
+HW3
+"""
+
+
+"""
+9x9 grid of beacons at (0,0), (0,4.5), (0,9), (4.5,0), ..., (9,9)
+"""
+function beacon_grid()
+    # define beacon locations:
+    _beacon_grid = [0, 4.5, 9]
+    return hcat([[x, y] for x in _beacon_grid, y in _beacon_grid]...)'
+end
+
+
+"""
+Generate a relative observation from a single beacon (assumes robot within distance d)
+"""
+function GenerateSingleRangedBeaconObservation(
+    𝒫::POMDPscenario,
+    robot_x::Vector{Float64},
+    beacon_x::Vector{Float64}
+    )::Vector{Float64}
+
+    # noise increases with distance:
+    rmin = 𝒫.rmin
+    r = norm(robot_x - beacon_x)
+    Σv = (0.1*max(r,rmin))^2 * I(2)
+
+    v = rand(𝒫.rng, MvNormal(zeros(2), Σv)) # v ~ N(0, Σv)
+    z_rel = (robot_x - beacon_x) + v
+    return z_rel
+end
+
+
+"""
+Generate a relative observation from the first beacon under distance d, with signal deterioration (minimum range rmin).
+"""
+function GenerateRangedObservationFromBeacons(
+    𝒫::POMDPscenario,
+    robot_x::Vector{Float64},
+    )::Union{Tuple{Vector{Float64}, Int}, Nothing}
+
+    # return an observation from the first beacon under distance threshold d:
+    result = GetFirstBeaconWithinDistance(𝒫, robot_x)
+    if result !== nothing
+        (beacon_x, i) = result
+        z_rel = GenerateSingleRangedBeaconObservation(𝒫, robot_x, beacon_x)
+        return (z_rel, i)
+    end
+    
+    return nothing
 end
 
 

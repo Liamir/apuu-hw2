@@ -230,14 +230,13 @@ Generate a relative observation from the first beacon under distance d, with sig
 function GenerateRangedObservationFromBeacons(
     𝒫::POMDPscenario,
     robot_x::Vector{Float64},
-    )::Union{Tuple{Vector{Float64}, Int}, Nothing}
-
+    )::Union{NamedTuple, Nothing}
     # return an observation from the first beacon under distance threshold d:
     result = GetFirstBeaconWithinDistance(𝒫, robot_x)
     if result !== nothing
         (beacon_x, i) = result
         z_rel = GenerateSingleRangedBeaconObservation(𝒫, robot_x, beacon_x)
-        return (z_rel, i)
+        return (obs=z_rel, beacon_index=i)
     end
     
     return nothing

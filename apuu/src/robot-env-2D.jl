@@ -216,7 +216,7 @@ function GenerateSingleRangedBeaconObservation(
     # noise increases with distance:
     rmin = 𝒫.rmin
     r = norm(robot_x - beacon_x)
-    Σv = (0.1*max(r,rmin))^2 * I(2)
+    Σv = (0.01*max(r,rmin))^2 * I(2)
 
     v = rand(𝒫.rng, MvNormal(zeros(2), Σv)) # v ~ N(0, Σv)
     z_rel = (robot_x - beacon_x) + v

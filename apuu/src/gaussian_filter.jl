@@ -11,7 +11,7 @@ using Plots
 using StatsPlots
 
 
-function PropagateBelief(𝒫::POMDPscenario, b::FullNormal, a::Vector{Float64})::FullNormal
+function PropagateBelief(𝒫::POMDPscenario, b::MvNormal, a::Vector{Float64})::MvNormal
     F = 𝒫.F
     μp = F * b.μ + a
     Σp = F * b.Σ * F' + 𝒫.Σw
@@ -34,7 +34,7 @@ Compute the posterior belief given a prior belief, action, and ranged beacon obs
 - `a::Vector{Float64}`: The action taken
 - `z::NamedTuple`: The relative observation, containing `obs` and `beacon_index`
 """
-function PosteriorBeliefRangedBeacons(𝒫::POMDPscenario, b::FullNormal, a::Vector{Float64}, z::NamedTuple)::FullNormal
+function PosteriorBeliefRangedBeacons(𝒫::POMDPscenario, b::MvNormal, a::Vector{Float64}, z::NamedTuple)::MvNormal
 
     beacon_index = z.beacon_index
     zrel = z.obs
@@ -45,7 +45,7 @@ function PosteriorBeliefRangedBeacons(𝒫::POMDPscenario, b::FullNormal, a::Vec
 
     # observation covariance:
     r = norm(zrel)
-    Σv = 0.1^2 * max(r, 𝒫.rmin)^2 * I(2)
+    Σv = 0.01^2 * max(r, 𝒫.rmin)^2 * I(2)
 
     # shift relative observation to beacon position:
     z_abs = zrel + 𝒫.beacons[beacon_index, :]
@@ -78,7 +78,7 @@ function PosteriorBeliefBeacons(𝒫::POMDPscenario, b::FullNormal, a::Vector{Fl
     Σp = b.Σ + 𝒫.Σw
 
     # observation covariance:
-    Σv = 0.1^2 * I(2)
+    Σv = 0.01^2 * I(2)
 
     # shift relative observation to beacon position:
     z = z.obs + 𝒫.beacons[z.beacon_index, :]
